@@ -67,7 +67,7 @@ services:
       timeout: 5s
       retries: 5
 
-  kafka-connect:
+  debezium:
     image: debezium/connect:2.5
     container_name: debezium
     restart: unless-stopped
@@ -111,11 +111,11 @@ services:
       KAFKA_CLUSTERS_0_NAME: "local-kafka"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: "local-connect"
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "http://kafka-connect:8083"
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "http://debezium:8083"
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     depends_on:
       - kafka
-      - kafka-connect
+      - debezium
 
   spark:
     image: bitnami/spark:3.5

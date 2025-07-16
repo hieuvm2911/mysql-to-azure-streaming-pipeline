@@ -21,10 +21,3 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-
--- Chèn một số dữ liệu mẫu
-INSERT INTO orders (user_id, product_id, quantity, price, payment_method, status)
-VALUES
-    (101, 201, 2, 19.99, 'credit_card', 'pending'),
-    (102, 202, 1, 59.00, 'paypal', 'processing'),
-    (103, 203, 3, 15.50, 'cod', 'shipped');
