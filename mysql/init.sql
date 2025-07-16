@@ -21,3 +21,10 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+INSERT INTO orders (user_id, product_id, quantity, price, payment_method, status)
+VALUES
+ 
+    (104, 204, 1, 299.99, 'credit_card', 'delivered'),
+    (105, 205, 2, 49.99, 'paypal', 'cancelled'),
+    (106, 206, 1, 9.99, 'cod', 'pending');

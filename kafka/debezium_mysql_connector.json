@@ -18,7 +18,7 @@
     "database.allowPublicKeyRetrieval": "true",
     "database.useSSL": "false",
     "decimal.handling.mode": "double",
-    "snapshot.mode": "SCHEMA_ONLY_RECOVERY",
+    "snapshot.mode": "initial",
     "poll.interval.ms": "1000",
     "heartbeat.interval.ms": "10000",
     "include.query": "false",

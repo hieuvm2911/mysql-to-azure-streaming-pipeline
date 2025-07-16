@@ -117,50 +117,53 @@ services:
       - kafka
       - debezium
 
-  spark:
-    image: bitnami/spark:3.5
-    container_name: spark
-    restart: unless-stopped
-    depends_on:
-      - kafka
+  spark-master:
+    image: bitnami/spark:3.4
+    container_name: spark-master
     environment:
       - SPARK_MODE=master
     ports:
-      - "7077:7077"
       - "8080:8080"
+
+  spark-worker:
+    image: bitnami/spark:3.4
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+
+  spark-job:
+    build:
+      context: ./spark
+    container_name: spark-job
+    depends_on:
+      - spark-master
+      - kafka
     volumes:
       - ./spark/jobs:/opt/spark/jobs
-      - ./spark/utils:/opt/spark/utils
-      - ./spark/config:/opt/spark/config
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    environment:
+      - SPARK_MODE=client
+      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
 
   airflow:
-    image: apache/airflow:2.9.1
+    image: apache/airflow:2.9.0
     container_name: airflow
-    restart: unless-stopped
+    restart: always
     depends_on:
-      - spark
+      - spark-master
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////usr/local/airflow/airflow.db
-      AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////usr/local/airflow/airflow.db
     ports:
       - "8081:8080"
     volumes:
-      - ./dags:/opt/airflow/dags
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
-      - airflow_logs:/opt/airflow/logs
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
 
 volumes:
   mysql_data:
