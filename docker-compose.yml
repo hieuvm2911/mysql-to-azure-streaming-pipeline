@@ -143,6 +143,7 @@ services:
       - kafka
     volumes:
       - ./spark/jobs:/opt/spark/jobs
+      - ./spark:/opt/spark
     environment:
       - SPARK_MODE=client
       - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
