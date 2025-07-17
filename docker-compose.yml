@@ -122,12 +122,8 @@ services:
     container_name: spark-master
     environment:
       - SPARK_MODE=master
-      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
     ports:
       - "8080:8080"
-    volumes:
-      - ./spark/conf:/opt/spark/conf
-      - ./spark/jobs:/opt/spark/jobs
 
   spark-worker:
     image: bitnami/spark:3.4
@@ -137,81 +133,37 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
-    volumes:
-      - ./spark/conf:/opt/spark/conf
-      - ./spark/jobs/kafka_to_azure.py:/opt/spark/jobs/kafka_to_azure.py
 
-
-  webserver:
-    image: apache/airflow:2.6.0-python3.9
-    container_name: webserver
-    entrypoint: ['/opt/airflow/script/entrypoint.sh']
+  spark-job:
+    build:
+      context: ./spark
+    container_name: spark-job
     depends_on:
-      - postgres
-      - debezium
+      - spark-master
+      - kafka
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+    environment:
+      - SPARK_MODE=client
+      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
+
+  airflow:
+    image: apache/airflow:2.9.0
+    container_name: airflow
+    restart: always
+    depends_on:
       - spark-master
     environment:
-      - LOAD_EX=n
-      - EXECUTOR=Sequential
-      - AIRFLOW__LOG__HOST=localhost 
-      - ARIFLOW__LOGGING__CREATE_SYMLINK='False'
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW__WEBSERVER__SECRET_KEY=this_is_a_very_secured_key
-      - AZURE_STORAGE_KEY= ${AZURE_STORAGE_KEY}
-
-    logging:
-      options:  
-        max-size: 10m
-        max-file: "3"
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
-      - ./requirements.txt:/opt/airflow/requirements.txt
-      - ./kafka/debezium_mysql_connector.json:/opt/airflow/kafka/debezium_mysql_connector.json
-      - ./spark/jobs/kafka_to_azure.py:/opt/spark/jobs/kafka_to_azure.py
-      - ./spark/conf:/opt/spark/conf
-      - /var/run/docker.sock:/var/run/docker.sock
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////usr/local/airflow/airflow.db
     ports:
       - "8081:8080"
-      - "8793:8793"
-    healthcheck:
-      test: ['CMD-SHELL', "[ -f /opt/airflow/airflow-webserver.pid ]"]
-      interval: 30s
-      timeout: 30s
-      retries: 3
-
-  scheduler:
-    image: apache/airflow:2.6.0-python3.9
-    depends_on:
-      - webserver
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
-      - ./requirements.txt:/opt/airflow/requirements.txt
-      - ./kafka/debezium_mysql_connector.json:/opt/airflow/kafka/debezium_mysql_connector.json
-      - ./spark/jobs/kafka_to_azure.py:/opt/spark/jobs/kafka_to_azure.py
-      - ./spark/conf:/opt/spark/conf
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - LOAD_EX=n
-      - EXECUTOR=Sequential
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW__WEBSERVER__SECRET_KEY=this_is_a_very_secured_key
-      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
 
-    command: bash -c "pip install -r ./requirements.txt && airflow db upgrade && airflow scheduler"
-
-  postgres:
-    image: postgres:14.0
-    environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-    logging:
-      options:
-        max-size: 10m
-        max-file: "3"
 
 volumes:
   mysql_data:

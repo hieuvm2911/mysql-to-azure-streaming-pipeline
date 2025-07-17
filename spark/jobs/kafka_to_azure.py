@@ -51,7 +51,7 @@ df_cleaned = df_parsed.select(
 )
 
 # Define ADLS Gen2 output path
-output_path = "abfss://temp-storage@sqlstream.dfs.core.windows.net/cdc/"    
+output_path = "abfss://temp-storage@sqlstream.dfs.core.windows.net/cdc/"
 
 # Write to ADLS Gen2 in Parquet format
 query = df_cleaned.writeStream \
