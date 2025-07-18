@@ -14,11 +14,6 @@ services:
       - "3306:3306"
     volumes:
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=rootpassword"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     command: >
       --server-id=223344
       --log-bin=mysql-bin
@@ -27,7 +22,6 @@ services:
       --enforce-gtid-consistency=ON
       --binlog-row-image=FULL
       --binlog_checksum=NONE
-
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -39,17 +33,19 @@ services:
     ports:
       - "2181:2181"
     healthcheck:
-      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181"]
+      interval: 30s
+      timeout: 10s
       retries: 5
+      start_period: 60s
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
     restart: unless-stopped
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -62,18 +58,31 @@ services:
     ports:
       - "9092:9092"
     healthcheck:
-      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/9092"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "sleep 5"]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local-kafka"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: "local-connect"
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "http://debezium:8083"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      kafka:
+        condition: service_healthy
 
   debezium:
     image: debezium/connect:2.5
     container_name: debezium
     restart: unless-stopped
     depends_on:
-      - kafka
-      - mysql
+      kafka:
+        condition: service_healthy
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: "connect-cluster"
@@ -96,26 +105,18 @@ services:
     volumes:
       - ./kafka/debezium_mysql_connector.json:/kafka/connectors/debezium_mysql_connector.json
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8083/connectors || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    restart: unless-stopped
-    ports:
-      - "8082:8080"
-    environment:
-      KAFKA_CLUSTERS_0_NAME: "local-kafka"
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: "local-connect"
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "http://debezium:8083"
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      test: ["CMD-SHELL", "sleep 5"]
+  debezium-init:
+    build:
+      context: .
+      dockerfile: debezium-connect.Dockerfile
+    container_name: debezium-init
+    restart: "no"
     depends_on:
-      - kafka
-      - debezium
+      debezium:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "sleep 5"]
 
   spark-master:
     image: bitnami/spark:3.4
@@ -124,23 +125,32 @@ services:
       - SPARK_MODE=master
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "sleep 5"]
 
   spark-worker:
     image: bitnami/spark:3.4
     container_name: spark-worker
     depends_on:
-      - spark-master
+      spark-master:
+        condition: service_healthy
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   spark-job:
     build:
       context: ./spark
     container_name: spark-job
     depends_on:
-      - spark-master
-      - kafka
+      spark-master:
+        condition: service_healthy
     volumes:
       - ./spark/jobs:/opt/spark/jobs
       - ./spark:/opt/spark
@@ -148,28 +158,9 @@ services:
       - SPARK_MODE=client
       - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
 
-  airflow:
-    image: apache/airflow:2.9.0
-    container_name: airflow
-    restart: always
-    depends_on:
-      - spark-master
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////usr/local/airflow/airflow.db
-    ports:
-      - "8081:8080"
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-
-
 volumes:
   mysql_data:
   kafka_data:
-  airflow_logs:
 
 networks:
   default:
