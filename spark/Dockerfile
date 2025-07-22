@@ -6,7 +6,7 @@
 
     # Copy jobs into image
     COPY jobs/ /opt/spark/jobs/
-    COPY submit.sh /opt/spark/submit.sh
-    RUN chmod +x /opt/spark/submit.sh
+    COPY submit_to_adls.sh /opt/spark/submit_to_adls.sh
+    RUN chmod +x /opt/spark/submit_to_adls.sh
 
-    CMD ["/opt/spark/submit.sh"]
+    CMD ["/opt/spark/submit_to_adls.sh"]

@@ -1,5 +1,32 @@
 version: '3.8'
 
+x-airflow-common:
+  &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: custom-airflow:2.9.1-python3.10
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__WEBSERVER__SECRET_KEY: 'my_secret_key'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    _PIP_ADDITIONAL_REQUIREMENTS: ''
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./requirements.txt:/opt/airflow/requirements.txt
+    - ./spark/jobs:/opt/spark/jobs
+    - ./spark:/opt/spark
+    - ./.env:/opt/airflow/.env
+    - /var/run/docker.sock:/var/run/docker.sock
+  depends_on:
+    - postgres
+
 services:
   mysql:
     image: mysql:8.0
@@ -123,10 +150,17 @@ services:
     container_name: spark-master
     environment:
       - SPARK_MODE=master
+      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
     ports:
       - "8080:8080"
+    volumes:
+      - ./spark:/opt/spark
     healthcheck:
       test: ["CMD-SHELL", "sleep 5"]
+    command: >
+      bash -c "
+      pip install python-dotenv &&
+      /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/scripts/spark/run.sh"
 
   spark-worker:
     image: bitnami/spark:3.4
@@ -137,6 +171,10 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
+      - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
+    volumes:
+      - ./.env:/opt/spark/conf/.env
+      - ./spark:/opt/spark
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8081 || exit 1"]
       interval: 30s
@@ -158,6 +196,44 @@ services:
       - SPARK_MODE=client
       - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
 
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8088:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow-triggerer
+    command: triggerer
+
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "pip install -r /opt/airflow/requirements.txt && airflow db init && airflow db upgrade && airflow users create --username admin --firstname admin --lastname admin --role Admin --email airflow@airflow.com --password admin"
+    restart: "no"
+    
 volumes:
   mysql_data:
   kafka_data:

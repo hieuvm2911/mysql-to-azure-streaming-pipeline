@@ -29,7 +29,7 @@
     "errors.deadletterqueue.context.headers.enable": "true",
     "transforms": "unwrap",
     "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-    "transforms.unwrap.drop.tombstones": "flase",
+    "transforms.unwrap.drop.tombstones": "true",
     "transforms.unwrap.delete.handling.mode": "rewrite",
     "transforms.unwrap.add.fields": "op,ts_ms",
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
