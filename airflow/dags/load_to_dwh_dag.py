@@ -11,17 +11,17 @@ default_args = {
 }
 
 with DAG(
-    'load_to_synapse_dag',
+    'load_to_dwh_dag',
     default_args=default_args,
-    description='Submit Spark job to load data to Synapse every 1 hour',
+    description='Submit Spark job to load data to DWH every 1 hour',
     schedule_interval='@hourly',  # or "0 * * * *"
     catchup=False,
 ) as dag:
 
     submit_spark_job = BashOperator(
-        task_id='spark_submit_to_synapse',
+        task_id='spark_submit_to_dwh',
         bash_command="""
-        {{ 'docker exec spark-master bash /opt/spark/submit_to_synapse.sh' }}
+        {{ 'docker exec spark-master bash /opt/spark/submit_to_dwh.sh' }}
     """
     )
 
