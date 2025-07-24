@@ -31,8 +31,9 @@ df_max = spark.read.jdbc(
 max_created_at = df_max.collect()[0]['max_created_at']
 
 # 5. Filter only new data if max_created_at exists
+df_order = df_order.withColumn("created_at_ts", to_timestamp(col("created_at")))
+
 if max_created_at is not None:
-    df_order = df_order.withColumn("created_at_ts", to_timestamp(col("created_at")))
     df_order = df_order.filter(col("created_at_ts") > max_created_at)
     print(f"Only loading rows created after {max_created_at}")
 else:
@@ -78,4 +79,3 @@ else:
         .option("driver", "com.microsoft.sqlserver.jdbc.SQLServerDriver") \
         .save()
 
-    print("New data loaded to DWH successfully.")

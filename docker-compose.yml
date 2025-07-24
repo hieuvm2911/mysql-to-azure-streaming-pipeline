@@ -179,8 +179,6 @@ services:
       - AZURE_STORAGE_KEY=${AZURE_STORAGE_KEY}
       - AZURE_SQL_USERNAME=${AZURE_SQL_USERNAME}
       - AZURE_SQL_PASSWORD=${AZURE_SQL_PASSWORD}
-      - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_MEMORY=2g
     volumes:
       - ./.env:/opt/spark/conf/.env
       - ./spark:/opt/spark
@@ -219,6 +217,12 @@ services:
       interval: 5s
       retries: 5
 
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "pip install -r /opt/airflow/requirements.txt && airflow db init && airflow db upgrade && airflow users create --username admin --firstname admin --lastname admin --role Admin --email airflow@airflow.com --password admin"
+    restart: "no"
+
   airflow-webserver:
     <<: *airflow-common
     container_name: airflow-webserver
@@ -240,11 +244,7 @@ services:
     container_name: airflow-triggerer
     command: triggerer
 
-  airflow-init:
-    <<: *airflow-common
-    command: >
-      bash -c "pip install -r /opt/airflow/requirements.txt && airflow db init && airflow db upgrade && airflow users create --username admin --firstname admin --lastname admin --role Admin --email airflow@airflow.com --password admin"
-    restart: "no"
+
     
 volumes:
   mysql_data:
